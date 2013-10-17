@@ -8,7 +8,6 @@ import os
 import sys
 
 import logging
-logger = logging.getLogger('tenyks')
 
 import gevent
 from gevent import queue
@@ -40,12 +39,14 @@ class Robot(object):
     * _Almost_ everything is evented.
     """
 
+    name = 'tenyks'
+
     def __init__(self):
         self.broadcast_queue = queue.Queue()
         gevent.spawn(self.broadcast_loop)
         gevent.spawn(self.handle_incoming_redis_messages)
 
-        self.prepare_environment()
+        self.logger = logging.getLogger(self.name)
 
         self.connections = {}
         self.bootstrap_connections()
@@ -72,7 +73,7 @@ class Robot(object):
             if success:
                 self.handshake(conn)
             else:
-                logger.error(u'{conn} failed to connect or we did not get a response'.format(
+                self.logger.error(u'{conn} failed to connect or we did not get a response'.format(
                     conn=conn.name))
                 continue
 
@@ -139,7 +140,7 @@ class Robot(object):
             'tenyks.robot.broadcast_to')
         pubsub = pubsub_factory(broadcast_channel)
         for raw_redis_message in pubsub.listen():
-            logger.info(u'Robot <- {data}'.format(
+            self.logger.info(u'Robot <- {data}'.format(
                 data=json.dumps(raw_redis_message)))
             try:
                 if raw_redis_message['data'] != 1L:
@@ -155,7 +156,7 @@ class Robot(object):
                                  payload,
                                  channels=[target,])
             except ValueError:
-                logger.info('Robot Pubsub: invalid JSON. Ignoring message.')
+                self.logger.info('Robot Pubsub: invalid JSON. Ignoring message.')
 
     def middleware_message(self, connection, data):
         for middleware in CORE_MIDDLEWARE:
@@ -175,7 +176,7 @@ class Robot(object):
                 if success:
                     self.handshake(connection)
                 else:
-                    logger.error(u'{conn} failed to connect or we did not get a response'.format(
+                    self.logger.error(u'{conn} failed to connect or we did not get a response'.format(
                         conn=connection.name))
                     continue
             try:
@@ -185,7 +186,7 @@ class Robot(object):
             data = self.middleware_message(connection, raw_line)
             if data:
                 self.broadcast_queue.put(data)
-        logger.info(u'{connection} Connection Worker: worker shutdown'.format(
+        self.logger.info(u'{connection} Connection Worker: worker shutdown'.format(
             connection=connection.name))
 
     def run(self):
@@ -198,7 +199,7 @@ class Robot(object):
                 gevent.joinall(self.workers)
                 break
         except KeyboardInterrupt:
-            logger.info('Robot: shutting down: user disconnect')
+            self.logger.info('Robot: shutting down: user disconnect')
             for name, connection in self.connections.iteritems():
                 connection.close()
         finally:
