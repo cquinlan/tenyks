@@ -1,18 +1,16 @@
 """ Core of tenyks. Contains Robot and IRC/Redis Lines"""
-import gevent.monkey
-gevent.monkey.patch_all()
-
 from datetime import datetime
 import json
 import os
 import sys
+import threading
 
 import logging
 
-import gevent
-from gevent import queue
 import redis
+import queue
 
+from tenyks.adapters.helpers import get_adapter_class
 from tenyks.banner import startup_banner
 from tenyks.commandmapping import command_parser
 from tenyks.config import settings, collect_settings
@@ -24,6 +22,28 @@ from tenyks import commands
 
 if hasattr(settings, 'MIDDLEWARE'):
     CORE_MIDDLEWARE += settings.MIDDLEWARE
+
+
+class Tenyks(object):
+
+    def __init__(self):
+        self._workers = []
+
+    def run(self):
+        try:
+            for name, adapter in self._adapters.items():
+                self._workers.append(adapter.start())
+            map(lambda w: w.join(), self._workers)
+        except KeyboardInterrupt:
+            self.logger.info('Robot: shutting down: user disconnect')
+            for name, connection in self.connections.iteritems():
+                connection.close()
+        finally:
+            for name, connection in self.connections.iteritems():
+                connection.send(commands.QUIT(
+                            message=getattr(self, 'exit_message', 'I\'m out!')))
+                connection.close()
+            sys.exit('Bye.')
 
 
 class Robot(object):
@@ -48,23 +68,10 @@ class Robot(object):
 
         self.logger = logging.getLogger(self.name)
 
-        self.connections = {}
+        self._adapters = {}
         self.bootstrap_connections()
 
-    def prepare_environment(self):
-        # TODO FIX THIS MESS
-        try:
-            os.mkdir(settings.WORKING_DIR)
-        except OSError:
-            # Already exists
-            pass
-        try:
-            os.mkdir(settings.DATA_WORKING_DIR)
-        except OSError:
-            # Already exists
-            pass
-
-    def bootstrap_connections(self):
+    def bootstrap(self):
         for name, connection in settings.CONNECTIONS.iteritems():
             conn = Connection(name, **connection)
             self.connections[name] = conn
@@ -76,6 +83,22 @@ class Robot(object):
                 self.logger.error(u'{conn} failed to connect or we did not get a response'.format(
                     conn=conn.name))
                 continue
+
+    def create_adapter(self, name, adapter_config):
+        adapter_class = get_adapter_class(adapter_config['adapter_type'])
+        adapter = adapter_class(name, adapter_config)
+        return adapter
+
+    def create_all_adapters(self, adapter_configs):
+        for name, adapter_config in adapter_configs.items():
+            self._adapters[name] = self.create_adapter(name, adapter_config)
+        return self.adapters
+
+    def connect_adapter(self, adapter_name):
+        pass
+
+    def connect_all_adapters(self):
+        pass
 
     def wait_for_success(self, connection):
         """
@@ -213,8 +236,8 @@ class Robot(object):
 def main():
     collect_settings()
     print(startup_banner())
-    robot = Robot()
-    robot.run()
+    tenyks = Tenyks()
+    tenyks.run()
 
 
 if __name__ == '__main__':

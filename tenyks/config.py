@@ -178,5 +178,4 @@ Use `tenyksmkconfig > /path/to/settings.py` and run Tenyks with
 
 def make_config():
     with open(join(PROJECT_ROOT, 'settings.py.dist'), 'r') as f:
-        for line in f.readlines():
-            print line,
+        print(f.read())

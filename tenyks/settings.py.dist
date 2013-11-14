@@ -3,7 +3,7 @@
 # Anything added to this file will be included in the tenyks.config.settings
 # singleton.
 
-DEBUG = False
+DEBUG = True
 
 ##############################################################################
 # The following setting defines a dictionary of IRC connections.
@@ -11,7 +11,8 @@ DEBUG = False
 # This setting is required.
 
 CONNECTIONS = {
-    'network1': {
+    'freenode': {
+        'adapter': 'tenyks.adapters.irc.adapter.IrcAdapter',
         'host': 'localhost',
         'port': 6667,
         'retries': 5,
@@ -20,8 +21,12 @@ CONNECTIONS = {
         'ident': 'tenyks',
         'realname': 'tenyks IRC bot',
         'commands': ['/msg nickserv identify foo bar'],
-        'admins': ['vhost-',],
-        'channels': ['#test',], # if your channel has a password: '#thechannel, thepassword'
+        'channels': {
+            '#test': {
+                'admins': ['kyle',],
+                'password': None,
+            }
+        },
         'ssl': False,
         #'ssl_version': 3, # if you need to force an ssl version
     },
